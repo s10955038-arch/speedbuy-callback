@@ -7,7 +7,7 @@ app = Flask(__name__)
 
 # ========== 設定區 ==========
 # Discord Bot Token（用你原本的 Bot Token）
-DISCORD_BOT_TOKEN = "MTUxMTM0Nzc0MTcxOTAwNzQ2NA.G4lxjw.4CBVhMoyzxAqNHm2ZDGxdqetFMwgwoKRAQLR74"
+DISCORD_BOT_TOKEN = "MTUxMTM0Nzc0MTcxOTAwNzQ2NA.GiVg9D.1zTAlLGoHRfriINY-4CTDJkjzgbB-fvdClRDC8"
 
 # Discord Webhook URL（備用，發送到指定頻道）
 DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1511316917699219600/63Gv56ImNzDNuU_EtgzpL_p7Eup6f9gKasqY0EakYbCTmKGDAarjYy-yoJ1gZSBLhcDa"
