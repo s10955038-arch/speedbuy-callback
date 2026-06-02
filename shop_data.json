@@ -1,0 +1,10 @@
+{
+  "categories": {},
+  "payment_methods": [
+    {"name": "餘額付款", "description": "使用帳戶餘額支付", "content": "💰 將從您的帳戶餘額扣除 {amount} 元", "type": "balance"},
+    {"name": "台幣付款", "description": "新台幣轉帳/匯款", "content": "🏦 銀行代碼：808 玉山銀行\n📋 帳號：1234-5678-9012", "type": "transfer"},
+    {"name": "超商代碼", "description": "超商代碼繳費", "content": "超商代碼：{code}\n繳費期限：{expire_date}", "type": "cvs"}
+  ],
+  "cart": {},
+  "orders": {}
+}
