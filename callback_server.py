@@ -5,6 +5,7 @@ import json
 
 app = Flask(__name__)
 
+# 設定你的 Discord Webhook URL
 DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1511316917699219600/63Gv56ImNzDNuU_EtgzpL_p7Eup6f9gKasqY0EakYbCTmKGDAarjYy-yoJ1gZSBLhcDa"
 
 def send_to_webhook(content, embed=None):
@@ -19,17 +20,6 @@ def send_to_webhook(content, embed=None):
     except Exception as e:
         print(f"❌ 發送 Webhook 失敗: {e}")
 
-def get_order_data(order_id):
-    try:
-        with open("shop_data.json", "r", encoding="utf-8") as f:
-            data = json.load(f)
-            orders = data.get("orders", {})
-            if order_id in orders:
-                return orders[order_id]
-    except Exception as e:
-        print(f"讀取訂單資料失敗: {e}")
-    return None
-
 @app.route('/speedbuy_callback', methods=['POST', 'GET'])
 def speedbuy_callback():
     if request.method == 'GET':
@@ -43,7 +33,6 @@ def speedbuy_callback():
         print(f"  {key}: {value}")
     print("=" * 50)
     
-    classif = data.get('Classif', '')
     data_id = data.get('Data_id', '')
     payment_no = data.get('Payment_no', '')
     amount = data.get('Amount', '')
@@ -52,31 +41,16 @@ def speedbuy_callback():
     if response_id == "1" or payment_no:
         print(f"✅ 訂單 {data_id} 付款成功！")
         
-        if classif == "E":
-            payment_type = "7-11 ibon"
-        elif classif == "F":
-            payment_type = "全家 FamiPort"
-        else:
-            payment_type = "超商代碼"
-        
-        order_data = get_order_data(data_id)
-        product_amount = order_data.get("amount", 0) if order_data else 0
-        fee = order_data.get("fee", 35) if order_data else 35
-        
         embed = {
             "title": "✅ 付款成功通知",
             "description": f"訂單 **{data_id}** 已完成付款！",
             "color": 0x00ff00,
             "fields": [
-                {"name": "💰 商品金額", "value": f"{product_amount} 元", "inline": True},
-                {"name": "💸 手續費", "value": f"{fee} 元", "inline": True},
                 {"name": "💵 總金額", "value": f"{amount} 元", "inline": True},
-                {"name": "🏪 付款方式", "value": payment_type, "inline": True},
                 {"name": "🔢 超商代碼", "value": payment_no or "無", "inline": True},
                 {"name": "🆔 訂單編號", "value": data_id, "inline": True}
             ],
-            "timestamp": datetime.now().isoformat(),
-            "footer": {"text": "阿巴商城 自動下單系統"}
+            "timestamp": datetime.now().isoformat()
         }
         
         send_to_webhook("", embed)
