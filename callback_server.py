@@ -10,7 +10,7 @@ app = Flask(__name__)
 DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1511316917699219600/63Gv56ImNzDNuU_EtgzpL_p7Eup6f9gKasqY0EakYbCTmKGDAarjYy-yoJ1gZSBLhcDa"
 
 # Discord Bot Token（發送到使用者下單的當前頻道）
-DISCORD_BOT_TOKEN = "MTUxMTIxMjU0NjA1MTI4MDk0Ng.GXOxZl.ffLSyt95ISeu4rbTQgRxk07uaeyyMgse9D3Cyg"  # 請改成你的 Discord Bot Token
+DISCORD_BOT_TOKEN = "MTUxMTIxMjU0NjA1MTI4MDk0Ng.GhbwC4.Zc3V7nnQDCaV8T5FJ070bna5vnWHNncvrpaj1E"  # 請改成你的 Discord Bot Token
 # ===========================
 
 def send_to_webhook(content, embed=None):
