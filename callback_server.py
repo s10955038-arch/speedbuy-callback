@@ -6,12 +6,39 @@ import json
 app = Flask(__name__)
 
 # ========== 設定區 ==========
-# Discord Webhook URL（發送到指定頻道）
-DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1511316917699219600/63Gv56ImNzDNuU_EtgzpL_p7Eup6f9gKasqY0EakYbCTmKGDAarjYy-yoJ1gZSBLhcDa"
+# Discord Bot Token（用你原本的 Bot Token）
+DISCORD_BOT_TOKEN = "MTUxMTIxMjU0NjA1MTI4MDk0Ng.GRTPSr.8XY5-n391oaIOEb8MsQhq-kVj7UlceznbIIH8M"
 
-# Discord Bot Token（發送到當前頻道）
-DISCORD_BOT_TOKEN = "MTUxMTIxMjU0NjA1MTI4MDk0Ng.GhbwC4.Zc3V7nnQDCaV8T5FJ070bna5vnWHNncvrpaj1E"
+# Discord Webhook URL（備用，發送到指定頻道）
+DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1511316917699219600/63Gv56ImNzDNuU_EtgzpL_p7Eup6f9gKasqY0EakYbCTmKGDAarjYy-yoJ1gZSBLhcDa"
 # ===========================
+
+def send_to_discord(channel_id, content, embed=None):
+    """直接用 Bot Token 發送訊息到 Discord（不需要 Bot 登入）"""
+    if not DISCORD_BOT_TOKEN:
+        print("❌ 未設定 DISCORD_BOT_TOKEN")
+        return False
+    
+    url = f"https://discord.com/api/v10/channels/{channel_id}/messages"
+    headers = {
+        "Authorization": f"Bot {DISCORD_BOT_TOKEN}",
+        "Content-Type": "application/json"
+    }
+    data = {"content": content}
+    if embed:
+        data["embeds"] = [embed]
+    
+    try:
+        response = requests.post(url, headers=headers, json=data)
+        if response.status_code == 200:
+            print(f"✅ 已發送通知到頻道 {channel_id}")
+            return True
+        else:
+            print(f"❌ 發送失敗: {response.status_code} - {response.text}")
+            return False
+    except Exception as e:
+        print(f"❌ 發送訊息失敗: {e}")
+        return False
 
 def send_to_webhook(content, embed=None):
     """發送到指定頻道（使用 Webhook）"""
@@ -25,28 +52,6 @@ def send_to_webhook(content, embed=None):
         print("✅ 已發送 Webhook 通知")
     except Exception as e:
         print(f"❌ 發送 Webhook 失敗: {e}")
-
-def send_to_channel(channel_id, content, embed=None):
-    """發送到指定頻道 ID（使用 Bot Token）"""
-    if not DISCORD_BOT_TOKEN:
-        print("❌ 未設定 DISCORD_BOT_TOKEN")
-        return
-    url = f"https://discord.com/api/v10/channels/{channel_id}/messages"
-    headers = {
-        "Authorization": f"Bot {DISCORD_BOT_TOKEN}",
-        "Content-Type": "application/json"
-    }
-    data = {"content": content}
-    if embed:
-        data["embeds"] = [embed]
-    try:
-        response = requests.post(url, headers=headers, json=data)
-        if response.status_code == 200:
-            print(f"✅ 已發送通知到頻道 {channel_id}")
-        else:
-            print(f"❌ 發送失敗: {response.status_code} - {response.text}")
-    except Exception as e:
-        print(f"❌ 發送訊息失敗: {e}")
 
 @app.route('/speedbuy_callback', methods=['POST', 'GET'])
 def speedbuy_callback():
@@ -99,7 +104,8 @@ def speedbuy_callback():
             if len(parts) >= 2:
                 channel_id = parts[0].replace("ABA", "")
                 print(f"✅ 解析到頻道 ID: {channel_id}")
-                send_to_channel(channel_id, "", embed)
+                # 用 Bot Token 直接發送（不需要 Bot 登入）
+                send_to_discord(channel_id, "", embed)
             else:
                 print(f"⚠️ 訂單 ID 格式不正確: {data_id}")
         else:
