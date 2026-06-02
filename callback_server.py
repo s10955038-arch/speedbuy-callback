@@ -5,15 +5,9 @@ import json
 
 app = Flask(__name__)
 
-# ========== 設定區 ==========
-# Discord Webhook URL（發送到指定頻道）
 DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1511316917699219600/63Gv56ImNzDNuU_EtgzpL_p7Eup6f9gKasqY0EakYbCTmKGDAarjYy-yoJ1gZSBLhcDa"
 
-# 注意：不需要 DISCORD_BOT_TOKEN 了！
-# ===========================
-
 def send_to_webhook(content, embed=None):
-    """發送到指定頻道（使用 Webhook）"""
     if not DISCORD_WEBHOOK_URL:
         return
     data = {"content": content}
@@ -26,7 +20,6 @@ def send_to_webhook(content, embed=None):
         print(f"❌ 發送 Webhook 失敗: {e}")
 
 def get_order_data(order_id):
-    """從訂單 ID 獲取訂單資料"""
     try:
         with open("shop_data.json", "r", encoding="utf-8") as f:
             data = json.load(f)
@@ -55,7 +48,6 @@ def speedbuy_callback():
     payment_no = data.get('Payment_no', '')
     amount = data.get('Amount', '')
     response_id = data.get('Response_id', '')
-    process_date = data.get('Process_date', '')
     
     if response_id == "1" or payment_no:
         print(f"✅ 訂單 {data_id} 付款成功！")
@@ -87,7 +79,6 @@ def speedbuy_callback():
             "footer": {"text": "阿巴商城 自動下單系統"}
         }
         
-        # 只發送到 Webhook 指定頻道
         send_to_webhook("", embed)
     
     return '<Roturlstatus>OK</Roturlstatus>'
@@ -97,7 +88,5 @@ def index():
     return "SpeedBuy Callback Server is Running!"
 
 if __name__ == '__main__':
-    print("=" * 50)
     print("啟動速買配回傳接收伺服器...")
-    print("=" * 50)
     app.run(host='0.0.0.0', port=5000, debug=False)
