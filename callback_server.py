@@ -1,7 +1,8 @@
-from flask import Flask, request
+from flask import Flask, request, Response
 from datetime import datetime
 import requests
 import json
+import threading
 
 app = Flask(__name__)
 
@@ -11,6 +12,7 @@ DISCORD_WEBHOOK_URL = "https://discord.com/api/webhooks/1511948231721091187/7kqK
 # ===========================
 
 def send_to_discord(channel_id, content, embed=None):
+    """發送訊息到 Discord"""
     url = f"https://discord.com/api/v10/channels/{channel_id}/messages"
     headers = {
         "Authorization": f"Bot {DISCORD_BOT_TOKEN}",
@@ -20,34 +22,34 @@ def send_to_discord(channel_id, content, embed=None):
     if embed:
         data["embeds"] = [embed]
     
-    response = requests.post(url, headers=headers, json=data)
-    print(f"發送結果: {response.status_code} - {response.text}")
-    return response.status_code == 200
+    try:
+        response = requests.post(url, headers=headers, json=data, timeout=10)
+        print(f"發送結果: {response.status_code}")
+        return response.status_code == 200
+    except Exception as e:
+        print(f"發送失敗: {e}")
+        return False
 
 def send_to_webhook(content, embed=None):
+    """發送到 Webhook"""
     data = {"content": content}
     if embed:
         data["embeds"] = [embed]
-    requests.post(DISCORD_WEBHOOK_URL, json=data)
-    print("✅ 已發送 Webhook 通知")
+    try:
+        requests.post(DISCORD_WEBHOOK_URL, json=data, timeout=10)
+        print("✅ 已發送 Webhook 通知")
+    except Exception as e:
+        print(f"❌ 發送 Webhook 失敗: {e}")
 
-@app.route('/speedbuy_callback', methods=['POST', 'GET'])
-def speedbuy_callback():
-    if request.method == 'GET':
-        data = request.args
-    else:
-        data = request.form
-    
-    print("=" * 50)
-    print(f"收到速買配回傳 - {datetime.now()}")
-    for key, value in data.items():
-        print(f"  {key}: {value}")
-    print("=" * 50)
-    
+def process_notification(data):
+    """背景處理付款通知"""
     data_id = data.get('Data_id', '')
     amount = data.get('Amount', '')
     payment_no = data.get('Payment_no', '')
     response_id = data.get('Response_id', '')
+    classif = data.get('Classif', '')
+    
+    print(f"處理訂單: {data_id}")
     
     if response_id == "1" or payment_no:
         print(f"✅ 訂單 {data_id} 付款成功！")
@@ -67,16 +69,34 @@ def speedbuy_callback():
         # 發送到 Webhook
         send_to_webhook("", embed)
         
-        # 直接從訂單 ID 提取頻道 ID 並發送
-        # 訂單 ID 格式: ABA1511331666717573130_202606021933144256
+        # 從訂單 ID 提取頻道 ID
         if "_" in data_id:
             channel_id = data_id.split("_")[0].replace("ABA", "")
             print(f"📢 準備發送到頻道: {channel_id}")
             send_to_discord(channel_id, "", embed)
-        else:
-            print(f"⚠️ 訂單 ID 沒有底線: {data_id}")
+
+@app.route('/speedbuy_callback', methods=['POST', 'GET'])
+def speedbuy_callback():
+    if request.method == 'GET':
+        data = request.args
+    else:
+        data = request.form
     
-    return '<Roturlstatus>OK</Roturlstatus>'
+    print("=" * 50)
+    print(f"收到速買配回傳 - {datetime.now()}")
+    for key, value in data.items():
+        print(f"  {key}: {value}")
+    print("=" * 50)
+    
+    # 先立即回傳 OK（1秒內）
+    response = Response('<Roturlstatus>OK</Roturlstatus>', mimetype='text/html')
+    
+    # 在背景執行通知（不影響回傳速度）
+    thread = threading.Thread(target=process_notification, args=(data,))
+    thread.daemon = True
+    thread.start()
+    
+    return response
 
 @app.route('/')
 def index():
