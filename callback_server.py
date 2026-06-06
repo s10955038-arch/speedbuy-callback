@@ -107,6 +107,7 @@ def scan_pending_orders():
 def start_order_scanner():
     def scanner_loop():
         print("🚀 啟動訂單主動查詢服務（每5分鐘掃描一次）")
+        print("✅ 主動查詢執行緒已啟動")
         time.sleep(10)
         while True:
             try:
@@ -176,8 +177,17 @@ def pending():
 
 @app.route('/force_check', methods=['GET'])
 def force():
+    print("🔥 手動觸發掃描！")
     threading.Thread(target=scan_pending_orders).start()
-    return jsonify({"status": "scanning_started"})
+    return jsonify({"status": "scanning_started", "message": "主動查詢已開始，請查看 Logs"})
+
+@app.route('/check_one', methods=['GET'])
+def check_one():
+    oid = request.args.get('order_id')
+    if not oid:
+        return jsonify({"error": "請提供 order_id 參數"}), 400
+    result = check_order_payment(oid)
+    return jsonify({"order_id": oid, "result": result})
 
 @app.route('/health', methods=['GET'])
 def health():
@@ -188,11 +198,17 @@ def health():
 @app.route('/')
 def index():
     return """
-    <h1>SpeedBuy Callback Server</h1>
-    <p>✅ 主動查詢每5分鐘執行一次</p>
+    <h1>SpeedBuy Callback Server with Active Query</h1>
+    <p>✅ 回傳接收服務運行中</p>
+    <p>✅ 主動查詢服務運行中（每5分鐘）</p>
     <p>📊 <a href='/health'>健康檢查</a></p>
-    <p>📋 <a href='/pending_orders'>待付款訂單</a></p>
-    <p>🔧 <a href='/force_check'>手動觸發掃描</a></p>
+    <hr>
+    <h3>測試端點</h3>
+    <ul>
+        <li><a href='/force_check'>手動觸發掃描</a></li>
+        <li><a href='/pending_orders'>查看待付款訂單</a></li>
+        <li><a href='/check_one?order_id=ABA1512667668518273174_202606061202569536'>測試單一訂單查詢</a></li>
+    </ul>
     """
 
 if __name__ == '__main__':
