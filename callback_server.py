@@ -6,6 +6,10 @@ import json
 import threading
 import time
 import os
+import urllib3
+
+# 忽略 SSL 警告（因為使用 verify=False）
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 app = Flask(__name__)
 
@@ -54,9 +58,11 @@ def send_to_discord(channel_id, embed):
         print(f"❌ 發送失敗: {e}")
 
 def check_order_payment(order_id):
+    """查詢訂單是否已付款（跳過 SSL 驗證）"""
     url = f"https://ssl.smse.com.tw/ezpos/roturl.asp?Dcvc={SPEEDBUY_MERCHANT_ID}&Rvg2c={SPEEDBUY_PARAM_CODE}&Data_id={order_id}&types=xml"
     try:
-        r = requests.get(url, timeout=10)
+        # 加上 verify=False 解決 SSL 憑證問題
+        r = requests.get(url, timeout=10, verify=False)
         if r.status_code == 200:
             root = ET.fromstring(r.text)
             status = root.findtext("Status", "")
@@ -71,6 +77,7 @@ def check_order_payment(order_id):
         return {"paid": False, "error": str(e)}
 
 def scan_pending_orders():
+    """掃描所有待付款訂單"""
     print(f"[{datetime.now()}] ========== 開始掃描待付款訂單 ==========")
     data = load_orders()
     pending = {oid: info for oid, info in data.get("orders", {}).items() if info.get("status") == "pending"}
@@ -98,27 +105,33 @@ def scan_pending_orders():
             if info.get("channel_id"):
                 send_to_discord(info.get("channel_id"), embed)
         else:
-            print(f"⏳ 訂單 {oid} 尚未付款")
+            error_msg = result.get("error", "")
+            if error_msg:
+                print(f"⚠️ 查詢失敗: {error_msg}")
+            else:
+                print(f"⏳ 訂單 {oid} 尚未付款")
         time.sleep(1)
     
     save_orders(data)
     print(f"[{datetime.now()}] ========== 掃描完成 ==========")
 
 def start_order_scanner():
+    """啟動定時掃描器"""
     def scanner_loop():
         print("🚀 啟動訂單主動查詢服務（每5分鐘掃描一次）")
         print("✅ 主動查詢執行緒已啟動")
-        time.sleep(10)
+        time.sleep(10)  # 啟動後先等10秒
         while True:
             try:
                 scan_pending_orders()
             except Exception as e:
                 print(f"掃描失敗: {e}")
-            time.sleep(300)
+            time.sleep(300)  # 5分鐘
     threading.Thread(target=scanner_loop, daemon=True).start()
 
 @app.route('/speedbuy_callback', methods=['POST', 'GET'])
 def callback():
+    """接收速買配回傳"""
     data = request.form if request.method == 'POST' else request.args
     print(f"收到回傳: {dict(data)}")
     
@@ -151,6 +164,7 @@ def callback():
 
 @app.route('/update_order_status', methods=['POST'])
 def update_order():
+    """儲存訂單（由 Discord Bot 呼叫）"""
     d = request.get_json()
     oid = d.get('order_id')
     if oid:
@@ -171,18 +185,21 @@ def update_order():
 
 @app.route('/pending_orders', methods=['GET'])
 def pending():
+    """查詢待付款訂單"""
     data = load_orders()
     pending = {oid: info for oid, info in data.get("orders", {}).items() if info.get("status") == "pending"}
     return jsonify({"count": len(pending), "orders": pending})
 
 @app.route('/force_check', methods=['GET'])
 def force():
+    """手動觸發掃描"""
     print("🔥 手動觸發掃描！")
     threading.Thread(target=scan_pending_orders).start()
     return jsonify({"status": "scanning_started", "message": "主動查詢已開始，請查看 Logs"})
 
 @app.route('/check_one', methods=['GET'])
 def check_one():
+    """測試單一訂單查詢"""
     oid = request.args.get('order_id')
     if not oid:
         return jsonify({"error": "請提供 order_id 參數"}), 400
@@ -191,12 +208,14 @@ def check_one():
 
 @app.route('/health', methods=['GET'])
 def health():
+    """健康檢查"""
     data = load_orders()
     pending_count = len([o for o in data.get("orders", {}).values() if o.get("status") == "pending"])
     return jsonify({"status": "ok", "pending_orders": pending_count, "data_file": DATA_FILE})
 
 @app.route('/')
 def index():
+    """首頁"""
     return """
     <h1>SpeedBuy Callback Server with Active Query</h1>
     <p>✅ 回傳接收服務運行中</p>
