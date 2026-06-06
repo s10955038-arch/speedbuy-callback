@@ -100,13 +100,21 @@ def check_order_payment(order_id):
     """主動查詢訂單是否已付款（根據速買配 API 規格）"""
     url = f"https://ssl.smse.com.tw/ezpos/roturl.asp?Dcvc={SPEEDBUY_MERCHANT_ID}&Rvg2c={SPEEDBUY_PARAM_CODE}&Data_id={order_id}&types=xml"
     
+    print(f"[查詢] 訂單: {order_id}")
+    print(f"[查詢] URL: {url}")
+    
     try:
         response = requests.get(url, timeout=10)
+        print(f"[查詢] 回應狀態: {response.status_code}")
+        print(f"[查詢] 回應內容: {response.text[:200]}")
+        
         if response.status_code == 200:
             root = ET.fromstring(response.text)
             status = root.findtext("Status", "")
             amount = root.findtext("Amount", "")
             payment_no = root.findtext("Payment_no", "")
+            
+            print(f"[查詢] Status={status}, Amount={amount}, Payment_no={payment_no}")
             
             if status == "1":
                 return {"paid": True, "amount": amount, "payment_no": payment_no}
@@ -115,12 +123,12 @@ def check_order_payment(order_id):
         else:
             return {"paid": False, "error": f"HTTP {response.status_code}"}
     except Exception as e:
+        print(f"[查詢] 錯誤: {e}")
         return {"paid": False, "error": str(e)}
 
 def extract_channel_id_from_order_id(order_id):
     """從訂單 ID 中提取頻道 ID"""
     if "_" in order_id:
-        # 訂單格式：ABA123456789_xxx
         return order_id.split("_")[0].replace("ABA", "")
     return None
 
@@ -150,14 +158,19 @@ def process_callback_notification(data):
         send_payment_notification(data_id, amount, payment_no, channel_id)
 
 def scan_pending_orders():
-    """主動掃描所有待付款訂單（每5分鐘執行）"""
-    print(f"[{datetime.now()}] 開始掃描待付款訂單...")
+    """主動掃描所有待付款訂單"""
+    print(f"[{datetime.now()}] ========== 開始掃描待付款訂單 ==========")
     
     orders_data = load_orders()
     orders = orders_data.get("orders", {})
     pending_orders = {oid: info for oid, info in orders.items() if info.get("status") == "pending"}
     
     print(f"找到 {len(pending_orders)} 筆待付款訂單")
+    
+    if len(pending_orders) == 0:
+        print("沒有待付款訂單，結束掃描")
+        return
+    
     updated_count = 0
     
     for order_id, order_info in pending_orders.items():
@@ -191,7 +204,7 @@ def scan_pending_orders():
         save_orders(orders_data)
         print(f"✅ 已更新 {updated_count} 筆訂單狀態")
     
-    print(f"[{datetime.now()}] 掃描完成")
+    print(f"[{datetime.now()}] ========== 掃描完成 ==========")
 
 def start_order_scanner():
     """啟動定時掃描器（在背景執行）"""
@@ -207,6 +220,7 @@ def start_order_scanner():
     
     scanner_thread = threading.Thread(target=scanner_loop, daemon=True)
     scanner_thread.start()
+    print("✅ 主動查詢執行緒已啟動")
 
 # ========== API 路由 ==========
 
@@ -276,6 +290,23 @@ def get_pending_orders():
                if info.get("status") == "pending"}
     return jsonify({"count": len(pending), "orders": pending})
 
+@app.route('/force_check', methods=['GET'])
+def force_check():
+    """強制檢查所有 pending 訂單（手動觸發）"""
+    print("🔥 手動觸發主動查詢！")
+    threading.Thread(target=scan_pending_orders).start()
+    return jsonify({"status": "scanning_started", "message": "主動查詢已開始，請查看 Logs"})
+
+@app.route('/check_one', methods=['GET'])
+def check_one():
+    """檢查單一訂單（測試用）"""
+    order_id = request.args.get('order_id')
+    if not order_id:
+        return jsonify({"error": "請提供 order_id 參數"}), 400
+    
+    result = check_order_payment(order_id)
+    return jsonify({"order_id": order_id, "result": result})
+
 @app.route('/health', methods=['GET'])
 def health_check():
     """健康檢查"""
@@ -296,9 +327,12 @@ def index():
     <p>✅ 主動查詢服務運行中（每5分鐘）</p>
     <p>📊 <a href='/health'>健康檢查</a></p>
     <hr>
-    <h3>設定方式</h3>
-    <p>將此網址設定到速買配的 roturl：<br>
-    <code>https://你的域名.onrender.com/speedbuy_callback</code></p>
+    <h3>測試端點</h3>
+    <ul>
+        <li><a href='/force_check'>手動觸發掃描</a></li>
+        <li><a href='/pending_orders'>查看待付款訂單</a></li>
+        <li><a href='/check_one?order_id=ABA1512667668518273174_202606061202569536'>測試單一訂單查詢</a></li>
+    </ul>
     """
 
 # ========== 主程式 ==========
@@ -321,5 +355,7 @@ if __name__ == '__main__':
     # 取得 Render 設定的 PORT
     port = int(os.environ.get('PORT', 5000))
     
+    # 啟動 Flask 伺服器
+    app.run(host='0.0.0.0', port=port, debug=False)
     # 啟動 Flask 伺服器
     app.run(host='0.0.0.0', port=port, debug=False)
