@@ -7,7 +7,7 @@ import threading
 import time
 import os
 import urllib3
-import subprocess
+import socket
 
 # 忽略 SSL 警告（因為使用 verify=False）
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -43,42 +43,43 @@ def save_orders(data):
         return False
 
 def send_to_webhook(embed):
-    """使用 curl 發送 Webhook（更穩定）"""
+    """發送 Discord Webhook 通知（終極穩定版）"""
     import json
     
-    print(f"🔧 [Webhook] 準備使用 curl 發送通知")
+    print(f"🔧 [Webhook] 準備發送通知")
     
-    payload = json.dumps({"embeds": [embed]})
-    # 轉義單引號
-    payload_escaped = payload.replace("'", "'\\''")
-    cmd = f"curl -s -X POST {DISCORD_WEBHOOK_URL} -H 'Content-Type: application/json' -d '{payload_escaped}'"
+    # 顯示 embed 摘要
+    print(f"🔧 [Webhook] 訂單: {embed.get('fields', [])[0].get('value', 'N/A') if embed.get('fields') else 'N/A'}")
     
+    payload = {"embeds": [embed]}
     max_retries = 3
     retry_delay = 2
     
     for attempt in range(max_retries):
         try:
-            print(f"🔧 [Webhook] curl 嘗試 {attempt+1}/{max_retries}")
-            result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=15)
-            print(f"🔧 [Webhook] curl 返回碼: {result.returncode}")
-            print(f"🔧 [Webhook] curl 輸出: {result.stdout[:200] if result.stdout else '空'}")
+            print(f"🔧 [Webhook] 嘗試 {attempt+1}/{max_retries}")
             
-            if result.returncode == 0:
-                # 檢查是否有錯誤訊息
-                if "Unknown Webhook" in result.stdout:
-                    print(f"❌ Webhook 失效: {result.stdout}")
-                elif "rate limited" in result.stdout.lower():
-                    print(f"⚠️ 被 Discord 限流，等待後重試")
-                else:
-                    print("✅ 已發送 Webhook (curl)")
-                    return True
+            response = requests.post(
+                DISCORD_WEBHOOK_URL,
+                json=payload,
+                timeout=15,
+                verify=False
+            )
+            
+            print(f"🔧 [Webhook] 狀態碼: {response.status_code}")
+            
+            if response.status_code == 204:
+                print("✅ 已發送 Webhook")
+                return True
             else:
-                print(f"⚠️ curl 發送失敗: {result.stderr[:100] if result.stderr else '未知錯誤'}")
+                print(f"⚠️ 回應異常: {response.status_code} - {response.text[:100]}")
                 
-        except subprocess.TimeoutExpired:
-            print(f"⚠️ curl 請求超時 (嘗試 {attempt+1}/{max_retries})")
+        except requests.exceptions.Timeout:
+            print(f"⚠️ 請求超時 (嘗試 {attempt+1}/{max_retries})")
+        except requests.exceptions.ConnectionError as e:
+            print(f"⚠️ 連線錯誤 (嘗試 {attempt+1}/{max_retries}): {str(e)[:100]}")
         except Exception as e:
-            print(f"⚠️ curl 發送異常 (嘗試 {attempt+1}/{max_retries}): {type(e).__name__} - {str(e)}")
+            print(f"⚠️ 發送異常 (嘗試 {attempt+1}/{max_retries}): {type(e).__name__} - {str(e)[:100]}")
         
         if attempt < max_retries - 1:
             print(f"🔧 等待 {retry_delay} 秒後重試...")
@@ -146,7 +147,7 @@ def scan_pending_orders():
                 "timestamp": datetime.now().isoformat()
             }
             
-            # 使用 curl 發送 Webhook
+            # 發送 Webhook
             send_to_webhook(embed)
             
             if info.get("channel_id"):
@@ -290,5 +291,7 @@ if __name__ == '__main__':
         print("📝 已建立新的訂單資料檔")
     
     start_order_scanner()
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port)
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port)
