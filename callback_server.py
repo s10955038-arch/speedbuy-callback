@@ -7,7 +7,6 @@ import threading
 import time
 import os
 import urllib3
-import socket
 
 # 忽略 SSL 警告（因為使用 verify=False）
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -43,13 +42,8 @@ def save_orders(data):
         return False
 
 def send_to_webhook(embed):
-    """發送 Discord Webhook 通知（終極穩定版）"""
-    import json
-    
+    """發送 Discord Webhook（強制指定 Discord IP）"""
     print(f"🔧 [Webhook] 準備發送通知")
-    
-    # 顯示 embed 摘要
-    print(f"🔧 [Webhook] 訂單: {embed.get('fields', [])[0].get('value', 'N/A') if embed.get('fields') else 'N/A'}")
     
     payload = {"embeds": [embed]}
     max_retries = 3
@@ -57,16 +51,13 @@ def send_to_webhook(embed):
     
     for attempt in range(max_retries):
         try:
-            print(f"🔧 [Webhook] 嘗試 {attempt+1}/{max_retries}")
-            
             response = requests.post(
                 DISCORD_WEBHOOK_URL,
                 json=payload,
                 timeout=15,
                 verify=False
             )
-            
-            print(f"🔧 [Webhook] 狀態碼: {response.status_code}")
+            print(f"🔧 [Webhook] 嘗試 {attempt+1}/{max_retries} - 狀態碼: {response.status_code}")
             
             if response.status_code == 204:
                 print("✅ 已發送 Webhook")
@@ -291,7 +282,5 @@ if __name__ == '__main__':
         print("📝 已建立新的訂單資料檔")
     
     start_order_scanner()
-    port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port)
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port)
