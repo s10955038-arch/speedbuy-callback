@@ -42,18 +42,47 @@ def save_orders(data):
         return False
 
 def send_to_webhook(embed):
-    try:
-        requests.post(DISCORD_WEBHOOK_URL, json={"embeds": [embed]}, timeout=10)
-        print("✅ 已發送 Webhook")
-    except Exception as e:
-        print(f"❌ Webhook失敗: {e}")
+    """發送 Discord Webhook 通知（含重試機制）"""
+    max_retries = 3
+    retry_delay = 2  # 秒
+    
+    print(f"🔧 [Webhook] 準備發送通知")
+    
+    for attempt in range(max_retries):
+        try:
+            response = requests.post(
+                DISCORD_WEBHOOK_URL,
+                json={"embeds": [embed]},
+                timeout=10
+            )
+            print(f"🔧 [Webhook] 嘗試 {attempt+1}/{max_retries} - 狀態碼: {response.status_code}")
+            
+            if response.status_code == 204:
+                print("✅ 已發送 Webhook")
+                return True
+            else:
+                print(f"⚠️ Webhook 回應異常: {response.status_code} - {response.text[:100]}")
+                
+        except requests.exceptions.Timeout:
+            print(f"⚠️ Webhook 請求超時 (嘗試 {attempt+1}/{max_retries})")
+        except requests.exceptions.ConnectionError:
+            print(f"⚠️ Webhook 連線錯誤 (嘗試 {attempt+1}/{max_retries})")
+        except Exception as e:
+            print(f"⚠️ Webhook 發送異常 (嘗試 {attempt+1}/{max_retries}): {type(e).__name__} - {str(e)}")
+        
+        if attempt < max_retries - 1:
+            print(f"🔧 等待 {retry_delay} 秒後重試...")
+            time.sleep(retry_delay)
+    
+    print("❌ Webhook 發送失敗，已重試 3 次")
+    return False
 
 def send_to_discord(channel_id, embed):
     url = f"https://discord.com/api/v10/channels/{channel_id}/messages"
     headers = {"Authorization": f"Bot {DISCORD_BOT_TOKEN}", "Content-Type": "application/json"}
     try:
-        requests.post(url, headers=headers, json={"embeds": [embed]}, timeout=10)
-        print(f"✅ 已發送到頻道 {channel_id}")
+        response = requests.post(url, headers=headers, json={"embeds": [embed]}, timeout=10)
+        print(f"✅ 已發送到頻道 {channel_id}，狀態: {response.status_code}")
     except Exception as e:
         print(f"❌ 發送失敗: {e}")
 
@@ -70,7 +99,6 @@ def check_order_payment(order_id):
             
             print(f"[查詢] 訂單 {order_id} Status={status}, Amount={amount}")
             
-            # 🔧 修改：必須 Status=1 且金額 > 0 才算已付款
             if status == "1" and amount and int(amount) > 0:
                 print(f"[查詢] ✅ 訂單已付款！金額: {amount}")
                 return {"paid": True, "amount": amount, "payment_no": payment_no}
@@ -108,23 +136,7 @@ def scan_pending_orders():
                 "timestamp": datetime.now().isoformat()
             }
             
-            # 🔧 強制測試發送（直接發送 HTTP 請求到 Discord）
-            print(f"🔧 準備直接發送 Webhook 到 Discord")
-            try:
-                test_response = requests.post(
-                    DISCORD_WEBHOOK_URL,
-                    json={"embeds": [embed]},
-                    timeout=10
-                )
-                print(f"🔧 直接發送回應狀態: {test_response.status_code}")
-                if test_response.status_code == 204:
-                    print("🔧 直接發送成功！")
-                else:
-                    print(f"🔧 直接發送失敗: {test_response.text}")
-            except Exception as e:
-                print(f"🔧 直接發送異常: {e}")
-            
-            # 原本的發送函數（保留）
+            # 發送 Webhook（含重試機制）
             send_to_webhook(embed)
             
             if info.get("channel_id"):
@@ -220,7 +232,7 @@ def pending():
 def force():
     """手動觸發掃描"""
     print("🔥 手動觸發掃描！")
-    scan_pending_orders()  # 直接同步執行
+    scan_pending_orders()
     return jsonify({"status": "scanning_started", "message": "主動查詢已開始，請查看 Logs"})
 
 @app.route('/check_one', methods=['GET'])
