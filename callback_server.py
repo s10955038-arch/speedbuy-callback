@@ -107,6 +107,24 @@ def scan_pending_orders():
                 ],
                 "timestamp": datetime.now().isoformat()
             }
+            
+            # 🔧 強制測試發送（直接發送 HTTP 請求到 Discord）
+            print(f"🔧 準備直接發送 Webhook 到 Discord")
+            try:
+                test_response = requests.post(
+                    DISCORD_WEBHOOK_URL,
+                    json={"embeds": [embed]},
+                    timeout=10
+                )
+                print(f"🔧 直接發送回應狀態: {test_response.status_code}")
+                if test_response.status_code == 204:
+                    print("🔧 直接發送成功！")
+                else:
+                    print(f"🔧 直接發送失敗: {test_response.text}")
+            except Exception as e:
+                print(f"🔧 直接發送異常: {e}")
+            
+            # 原本的發送函數（保留）
             send_to_webhook(embed)
             
             if info.get("channel_id"):
